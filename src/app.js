@@ -4,8 +4,13 @@ import { WebSocketServer } from "ws";
 import path from "path";
 import { fileURLToPath } from "url";
 import { scanAndBuild } from "./lib/scanner.js";
+import { requireAdmin } from "./lib/adminAuth.js";
+import { loadAdminConfig, saveAdminConfig, normalizeAdminConfig } from "./lib/adminConfig.js";
 import { buildOrderedTracks, getScheduleAround } from "./lib/timeline.js";
 import { readJsonSafe } from "./lib/util.js";
+
+import dotenv from "dotenv";
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +38,9 @@ const MEDIA_THUMBNAIL_DIR = path.resolve(
 );
 const DB_PATH = path.resolve(__dirname, env("DB_PATH", "../media/db.json"));
 
+const ADMIN_CFG_PATH = path.resolve(__dirname, "../media/admin.json");
+let adminCfg = loadAdminConfig(ADMIN_CFG_PATH);
+
 const FFMPEG = env("FFMPEG", "ffmpeg");
 const FFPROBE = env("FFPROBE", "ffprobe");
 
@@ -41,6 +49,9 @@ const HLS_LIST_SIZE = Number(env("HLS_LIST_SIZE", "12"));
 
 const EPOCH_MS = Number(env("EPOCH_MS", "1710000000000"));
 const LOOKAHEAD_MS = 10 * 60_000;
+
+let forced = null;
+// forced = { trackId, name, thumbnail, hlsUrl, atServerMs }
 
 let lastDb = readJsonSafe(DB_PATH, { tracks: {} });
 let lastTracks = buildOrderedTracks(lastDb);
@@ -60,9 +71,66 @@ async function rebuild() {
 }
 
 // await rebuild();
+lastTracks = buildOrderedTracks(lastDb, adminCfg);
 
 const app = express();
 app.use(cors());
+
+app.get("/api/admin/state", requireAdmin, (req, res) => {
+  res.json({
+    ok: true,
+    adminCfg,
+    tracks: lastTracks
+  });
+});
+
+app.post("/api/admin/order", express.json(), requireAdmin, (req, res) => {
+  const cfg = normalizeAdminConfig({ ...adminCfg, order: req.body?.order });
+  adminCfg = cfg;
+  saveAdminConfig(ADMIN_CFG_PATH, adminCfg);
+
+  // rebuild ordering immediately
+  lastTracks = buildOrderedTracks(lastDb, adminCfg);
+
+  // push schedule to clients
+  pushScheduleToAllClients();
+
+  res.json({ ok: true, adminCfg });
+});
+
+app.post("/api/admin/disabled", express.json(), requireAdmin, (req, res) => {
+  const cfg = normalizeAdminConfig({ ...adminCfg, disabled: req.body?.disabled });
+  adminCfg = cfg;
+  saveAdminConfig(ADMIN_CFG_PATH, adminCfg);
+
+  lastTracks = buildOrderedTracks(lastDb, adminCfg);
+  pushScheduleToAllClients();
+
+  res.json({ ok: true, adminCfg });
+});
+
+app.post("/api/admin/force", express.json(), requireAdmin, (req, res) => {
+  const { trackId, delayMs = 5000 } = req.body || {};
+  if (!trackId) return res.status(400).json({ ok: false, error: "trackId required" });
+
+  const now = Date.now();
+  const track = lastTracks.find(t => t.id == trackId);
+  forced = {
+    trackId,
+    name: track.name,
+    thumbnail: PUBLIC_BASE_URL + track.thumbnail,
+    hlsUrl: PUBLIC_BASE_URL + track.hlsRel,
+    atServerMs: now + Number(delayMs),
+    durationMs: track.durationMs,
+  };
+  
+  const payload = JSON.stringify({ type: "force", forced });
+  for (const ws of wss.clients) {
+    if (ws.readyState === 1) ws.send(payload);
+  }
+
+  res.json({ ok: true, forced });
+});
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -138,7 +206,7 @@ wss.on("connection", (ws, req) => {
     thumbnail: PUBLIC_BASE_URL + s.thumbnail,
   }));
 
-  send(ws, { type: "hello", nowServerMs: now, epochMs: EPOCH_MS, schedule });
+  send(ws, { type: "hello", nowServerMs: now, epochMs: EPOCH_MS, schedule, forced });
 
   ws.on("message", (buf) => {
     let msg;
@@ -179,6 +247,21 @@ wss.on("connection", (ws, req) => {
     }
   });
 });
+
+function pushScheduleToAllClients() {
+  const now = Date.now();
+  const schedule = getScheduleAround({
+    tracks: lastTracks,
+    epochMs: EPOCH_MS,
+    nowMs: now,
+    lookAheadMs: LOOKAHEAD_MS
+  }).map(s => ({ ...s, hlsUrl: PUBLIC_BASE_URL + s.hlsUrl }));
+
+  const payload = JSON.stringify({ type: "schedule", nowServerMs: now, epochMs: EPOCH_MS, schedule, forced });
+  for (const ws of wss.clients) {
+    if (ws.readyState === 1) ws.send(payload);
+  }
+}
 
 // هر 15 ثانیه schedule push
 setInterval(() => {
