@@ -138,6 +138,7 @@ app.get("/api/health", (req, res) => {
     tracks: lastTracks.length,
     nowServerMs: Date.now(),
     epochMs: EPOCH_MS,
+    online: onlineClients.size,
   });
 });
 
@@ -182,17 +183,37 @@ const server = app.listen(PORT, () => {
 });
 
 const wss = new WebSocketServer({ server, path: "/ws" });
+const onlineClients = new Set();
+
+function broadcast(obj) {
+  const payload = JSON.stringify(obj);
+  for (const client of wss.clients) {
+    if (client.readyState === 1) client.send(payload);
+  }
+}
+
+function broadcastOnlineCount() {
+  broadcast({ type: "online_count", count: onlineClients.size });
+}
 
 function send(ws, obj) {
   ws.send(JSON.stringify(obj));
 }
 
 wss.on("connection", (ws, req) => {
-  console.log("WS connected from:", req.socket.remoteAddress, "url:", req.url);
+  console.log("WS connected from:", req.socket.remoteAddress);
+  onlineClients.add(ws);
+  broadcastOnlineCount();
 
-  ws.on("error", (e) => console.error("WS error:", e));
   ws.on("close", (code, reason) => {
     console.log("WS closed:", code, reason?.toString?.() || "");
+    onlineClients.delete(ws);
+    broadcastOnlineCount();
+  });
+  ws.on("error", (e) => {
+    console.error("WS error:", e)
+    onlineClients.delete(ws);
+    broadcastOnlineCount();
   });
   const now = Date.now();
   const schedule = getScheduleAround({
