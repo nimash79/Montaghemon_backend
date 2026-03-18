@@ -76,6 +76,37 @@ lastTracks = buildOrderedTracks(lastDb, adminCfg);
 const app = express();
 app.use(cors());
 
+import fs from "fs";
+
+app.use(express.json({ limit: "1mb" }));
+
+const LOG_DIR = path.resolve("./logs");
+fs.mkdirSync(LOG_DIR, { recursive: true });
+
+function appendLogLine(line) {
+  const file = path.join(LOG_DIR, `client-${new Date().toISOString().slice(0, 10)}.log`); // روزانه
+  fs.appendFile(file, line + "\n", (err) => {
+    if (err) console.error("append log failed:", err);
+  });
+}
+
+app.post("/api/client-log", (req, res) => {
+  const ip =
+    req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ||
+    req.socket.remoteAddress ||
+    "-";
+
+  const logs = Array.isArray(req.body?.logs) ? req.body.logs : [];
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i] ? JSON.stringify(logs[i]) : "-";
+    const line = `[${new Date().toISOString()}] ip=${ip} log=${log}`;
+    appendLogLine(line);
+  }
+
+
+  res.json({ ok: true });
+});
+
 app.get("/api/admin/state", requireAdmin, (req, res) => {
   res.json({
     ok: true,
