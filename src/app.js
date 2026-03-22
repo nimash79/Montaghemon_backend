@@ -5,9 +5,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scanAndBuild } from "./lib/scanner.js";
 import { requireAdmin } from "./lib/adminAuth.js";
-import { loadAdminConfig, saveAdminConfig, normalizeAdminConfig } from "./lib/adminConfig.js";
+import {
+  loadAdminConfig,
+  saveAdminConfig,
+  normalizeAdminConfig,
+} from "./lib/adminConfig.js";
 import { buildOrderedTracks, getScheduleAround } from "./lib/timeline.js";
 import { readJsonSafe } from "./lib/util.js";
+import fs from "fs";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -19,8 +24,6 @@ function env(name, def) {
   return process.env[name] ?? def;
 }
 
-// ساده: .env را خودتان export کنید یا با systemd set کنید.
-// اگر خواستید dotenv هم می‌گذارم، ولی فعلاً بدون پکیج اضافی.
 const PORT = Number(env("PORT", "8080"));
 const PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", `http://192.168.1.102:${PORT}`);
 
@@ -76,15 +79,16 @@ lastTracks = buildOrderedTracks(lastDb, adminCfg);
 const app = express();
 app.use(cors());
 
-import fs from "fs";
-
 app.use(express.json({ limit: "1mb" }));
 
 const LOG_DIR = path.resolve("./logs");
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
 function appendLogLine(line) {
-  const file = path.join(LOG_DIR, `client-${new Date().toISOString().slice(0, 10)}.log`); // روزانه
+  const file = path.join(
+    LOG_DIR,
+    `client-${new Date().toISOString().slice(0, 10)}.log`,
+  ); // روزانه
   fs.appendFile(file, line + "\n", (err) => {
     if (err) console.error("append log failed:", err);
   });
@@ -103,7 +107,6 @@ app.post("/api/client-log", (req, res) => {
     appendLogLine(line);
   }
 
-
   res.json({ ok: true });
 });
 
@@ -111,7 +114,7 @@ app.get("/api/admin/state", requireAdmin, (req, res) => {
   res.json({
     ok: true,
     adminCfg,
-    tracks: lastTracks
+    tracks: lastTracks,
   });
 });
 
@@ -130,7 +133,10 @@ app.post("/api/admin/order", express.json(), requireAdmin, (req, res) => {
 });
 
 app.post("/api/admin/disabled", express.json(), requireAdmin, (req, res) => {
-  const cfg = normalizeAdminConfig({ ...adminCfg, disabled: req.body?.disabled });
+  const cfg = normalizeAdminConfig({
+    ...adminCfg,
+    disabled: req.body?.disabled,
+  });
   adminCfg = cfg;
   saveAdminConfig(ADMIN_CFG_PATH, adminCfg);
 
@@ -142,10 +148,11 @@ app.post("/api/admin/disabled", express.json(), requireAdmin, (req, res) => {
 
 app.post("/api/admin/force", express.json(), requireAdmin, (req, res) => {
   const { trackId, delayMs = 5000 } = req.body || {};
-  if (!trackId) return res.status(400).json({ ok: false, error: "trackId required" });
+  if (!trackId)
+    return res.status(400).json({ ok: false, error: "trackId required" });
 
   const now = Date.now();
-  const track = lastTracks.find(t => t.id == trackId);
+  const track = lastTracks.find((t) => t.id == trackId);
   forced = {
     trackId,
     name: track.name,
@@ -154,7 +161,7 @@ app.post("/api/admin/force", express.json(), requireAdmin, (req, res) => {
     atServerMs: now + Number(delayMs),
     durationMs: track.durationMs,
   };
-  
+
   const payload = JSON.stringify({ type: "force", forced });
   for (const ws of wss.clients) {
     if (ws.readyState === 1) ws.send(payload);
@@ -242,7 +249,7 @@ wss.on("connection", (ws, req) => {
     broadcastOnlineCount();
   });
   ws.on("error", (e) => {
-    console.error("WS error:", e)
+    console.log("WS error:", e);
     onlineClients.delete(ws);
     broadcastOnlineCount();
   });
@@ -258,7 +265,13 @@ wss.on("connection", (ws, req) => {
     thumbnail: PUBLIC_BASE_URL + s.thumbnail,
   }));
 
-  send(ws, { type: "hello", nowServerMs: now, epochMs: EPOCH_MS, schedule, forced });
+  send(ws, {
+    type: "hello",
+    nowServerMs: now,
+    epochMs: EPOCH_MS,
+    schedule,
+    forced,
+  });
 
   ws.on("message", (buf) => {
     let msg;
@@ -266,8 +279,7 @@ wss.on("connection", (ws, req) => {
       msg = JSON.parse(buf.toString());
     } catch {
       return;
-    }
-
+    }    
     if (msg.type === "time_ping") {
       const recv = Date.now();
       send(ws, {
@@ -276,9 +288,7 @@ wss.on("connection", (ws, req) => {
         serverRecvMs: recv,
         serverSendMs: Date.now(),
       });
-    }
-
-    if (msg.type === "need_schedule") {
+    } else if (msg.type === "need_schedule") {
       const now2 = Date.now();
       const schedule2 = getScheduleAround({
         tracks: lastTracks,
@@ -306,10 +316,16 @@ function pushScheduleToAllClients() {
     tracks: lastTracks,
     epochMs: EPOCH_MS,
     nowMs: now,
-    lookAheadMs: LOOKAHEAD_MS
-  }).map(s => ({ ...s, hlsUrl: PUBLIC_BASE_URL + s.hlsUrl }));
+    lookAheadMs: LOOKAHEAD_MS,
+  }).map((s) => ({ ...s, hlsUrl: PUBLIC_BASE_URL + s.hlsUrl }));
 
-  const payload = JSON.stringify({ type: "schedule", nowServerMs: now, epochMs: EPOCH_MS, schedule, forced });
+  const payload = JSON.stringify({
+    type: "schedule",
+    nowServerMs: now,
+    epochMs: EPOCH_MS,
+    schedule,
+    forced,
+  });
   for (const ws of wss.clients) {
     if (ws.readyState === 1) ws.send(payload);
   }
