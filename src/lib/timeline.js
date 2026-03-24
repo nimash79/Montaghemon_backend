@@ -16,8 +16,7 @@ export function buildOrderedTracks(db, adminCfg) {
   // اول طبق order، بعد باقی‌مانده‌ها به ترتیب الفبایی
   const ordered = order.map((id) => byId.get(id));
   const rest = enabled
-    .filter((t) => !order.includes(t.id))
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .filter((t) => !order.includes(t.id));
 
   return [...ordered, ...rest];
 }
