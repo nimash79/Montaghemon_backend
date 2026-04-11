@@ -3,7 +3,8 @@
     "type": "module",
     "main": "app.js",
     "scripts": {
-        "dev": "nodemon ./src/app.js"
+        "dev": "nodemon ./src/app.js",
+        "shuffle": "node ./src/shuffle.js ./media/db.json"
     },
     "dependencies": {
         "cors": "^2.8.5",
