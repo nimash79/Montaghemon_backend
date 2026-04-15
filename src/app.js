@@ -5,11 +5,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { scanAndBuild } from "./lib/scanner.js";
 import { requireAdmin } from "./lib/adminAuth.js";
-import {
-  loadAdminConfig,
-  saveAdminConfig,
-  normalizeAdminConfig,
-} from "./lib/adminConfig.js";
 import { buildOrderedTracks, getScheduleAround } from "./lib/timeline.js";
 import { readJsonSafe } from "./lib/util.js";
 import fs from "fs";
@@ -41,9 +36,6 @@ const MEDIA_THUMBNAIL_DIR = path.resolve(
 );
 const DB_PATH = path.resolve(__dirname, env("DB_PATH", "../media/db.json"));
 
-const ADMIN_CFG_PATH = path.resolve(__dirname, "../media/admin.json");
-let adminCfg = loadAdminConfig(ADMIN_CFG_PATH);
-
 const FFMPEG = env("FFMPEG", "ffmpeg");
 const FFPROBE = env("FFPROBE", "ffprobe");
 
@@ -74,7 +66,7 @@ async function rebuild() {
 }
 
 // await rebuild();
-lastTracks = buildOrderedTracks(lastDb, adminCfg);
+lastTracks = buildOrderedTracks(lastDb);
 
 const app = express();
 app.use(cors());
@@ -110,64 +102,26 @@ app.post("/api/client-log", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/admin/state", requireAdmin, (req, res) => {
+app.get("/api/tracks", (req, res) => {
+  let tracks = lastTracks.map((t) => ({
+    ...t,
+    thumbnail: PUBLIC_BASE_URL + t.thumbnail,
+    hlsUrl: PUBLIC_BASE_URL + t.hlsRel,
+  }));
+
+  tracks = tracks.filter(
+    (track, index, arr) =>
+      index ===
+      arr.findIndex(
+        (t) => t.thumbnail === track.thumbnail && t.name === track.name,
+      ),
+  );
+
   res.json({
     ok: true,
-    adminCfg,
-    tracks: lastTracks,
+    total: tracks.length,
+    tracks,
   });
-});
-
-app.post("/api/admin/order", express.json(), requireAdmin, (req, res) => {
-  const cfg = normalizeAdminConfig({ ...adminCfg, order: req.body?.order });
-  adminCfg = cfg;
-  saveAdminConfig(ADMIN_CFG_PATH, adminCfg);
-
-  // rebuild ordering immediately
-  lastTracks = buildOrderedTracks(lastDb, adminCfg);
-
-  // push schedule to clients
-  pushScheduleToAllClients();
-
-  res.json({ ok: true, adminCfg });
-});
-
-app.post("/api/admin/disabled", express.json(), requireAdmin, (req, res) => {
-  const cfg = normalizeAdminConfig({
-    ...adminCfg,
-    disabled: req.body?.disabled,
-  });
-  adminCfg = cfg;
-  saveAdminConfig(ADMIN_CFG_PATH, adminCfg);
-
-  lastTracks = buildOrderedTracks(lastDb, adminCfg);
-  pushScheduleToAllClients();
-
-  res.json({ ok: true, adminCfg });
-});
-
-app.post("/api/admin/force", express.json(), requireAdmin, (req, res) => {
-  const { trackId, delayMs = 5000 } = req.body || {};
-  if (!trackId)
-    return res.status(400).json({ ok: false, error: "trackId required" });
-
-  const now = Date.now();
-  const track = lastTracks.find((t) => t.id == trackId);
-  forced = {
-    trackId,
-    name: track.name,
-    thumbnail: PUBLIC_BASE_URL + track.thumbnail,
-    hlsUrl: PUBLIC_BASE_URL + track.hlsRel,
-    atServerMs: now + Number(delayMs),
-    durationMs: track.durationMs,
-  };
-
-  const payload = JSON.stringify({ type: "force", forced });
-  for (const ws of wss.clients) {
-    if (ws.readyState === 1) ws.send(payload);
-  }
-
-  res.json({ ok: true, forced });
 });
 
 app.get("/api/health", (req, res) => {
@@ -279,7 +233,7 @@ wss.on("connection", (ws, req) => {
       msg = JSON.parse(buf.toString());
     } catch {
       return;
-    }    
+    }
     if (msg.type === "time_ping") {
       const recv = Date.now();
       send(ws, {

@@ -1,4 +1,4 @@
-export function buildOrderedTracks(db, adminCfg) {
+export function buildOrderedTracks(db) {
   const all = Object.entries(db.tracks).map(([key, t]) => ({
     id: key,
     name: t.name,
@@ -7,18 +7,7 @@ export function buildOrderedTracks(db, adminCfg) {
     hlsRel: t.hlsRel,
   }));
 
-  const disabled = new Set(adminCfg?.disabled || []);
-  const enabled = all.filter((t) => !disabled.has(t.id));
-
-  const byId = new Map(enabled.map((t) => [t.id, t]));
-  const order = (adminCfg?.order || []).filter((id) => byId.has(id));
-
-  // اول طبق order، بعد باقی‌مانده‌ها به ترتیب الفبایی
-  const ordered = order.map((id) => byId.get(id));
-  const rest = enabled
-    .filter((t) => !order.includes(t.id));
-
-  return [...ordered, ...rest];
+  return all;
 }
 
 export function getScheduleAround({ tracks, epochMs, nowMs, lookAheadMs }) {
