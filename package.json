@@ -7,9 +7,11 @@
         "shuffle": "node ./src/shuffle.js ./media/db.json"
     },
     "dependencies": {
+        "bcrypt": "^6.0.0",
         "cors": "^2.8.5",
         "dotenv": "^17.3.1",
         "express": "^4.19.2",
+        "mongoose": "^9.4.1",
         "nodemon": "^3.1.14",
         "ws": "^8.18.0"
     }

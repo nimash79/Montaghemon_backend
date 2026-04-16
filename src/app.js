@@ -2,12 +2,16 @@ import express from "express";
 import cors from "cors";
 import { WebSocketServer } from "ws";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
+
 import { scanAndBuild } from "./lib/scanner.js";
 import { requireAdmin } from "./lib/adminAuth.js";
 import { buildOrderedTracks, getScheduleAround } from "./lib/timeline.js";
 import { readJsonSafe } from "./lib/util.js";
-import fs from "fs";
+import connectDB from "./database/index.js";
+import roomRoutes from "./routes/rooms.js";
+import { setupRoomSocket } from "./websocket/roomSocket.js";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -33,6 +37,10 @@ const MEDIA_HLS_DIR = path.resolve(
 const MEDIA_THUMBNAIL_DIR = path.resolve(
   __dirname,
   env("MEDIA_THUMBNAIL_DIR", "../media/thumbnail"),
+);
+const ROOM_LOGO_DIR = path.resolve(
+  __dirname,
+  env("ROOM_LOGO_DIR", "../media/logo"),
 );
 const DB_PATH = path.resolve(__dirname, env("DB_PATH", "../media/db.json"));
 
@@ -75,6 +83,10 @@ app.use(express.json({ limit: "1mb" }));
 
 const LOG_DIR = path.resolve("./logs");
 fs.mkdirSync(LOG_DIR, { recursive: true });
+
+connectDB();
+
+app.use("/api/rooms", roomRoutes);
 
 function appendLogLine(line) {
   const file = path.join(
@@ -164,6 +176,15 @@ app.use(
 app.use(
   "/thumbnail",
   express.static(MEDIA_THUMBNAIL_DIR, {
+    etag: true,
+    lastModified: true,
+    maxAge: "10m",
+  }),
+);
+
+app.use(
+  "/logo",
+  express.static(ROOM_LOGO_DIR, {
     etag: true,
     lastModified: true,
     maxAge: "10m",
@@ -261,8 +282,66 @@ wss.on("connection", (ws, req) => {
         schedule: schedule2,
       });
     }
+    //  else if (msg.type === "join_room") {
+    //   ws.roomId = msg.roomId;
+    //   const room = rooms.find((r) => r.roomId === msg.roomId);
+    //   const now = Date.now();
+    //   let position = room.basePositionSeconds;
+    //   if (room.isPlaying) {
+    //     position += (now - room.startAtServerMs) / 1000;
+    //   }
+    //   send(ws, {
+    //     type: "join_room",
+    //     room,
+    //     track: {
+    //       id: room.trackId,
+    //       name: room.trackName,
+    //       thumbnail: room.thumbnail,
+    //       hlsUrl: room.hlsUrl,
+    //     },
+    //     positionSeconds: position,
+    //     startAtServerMs: room.startAtServerMs,
+    //   });
+    // } else if (msg.type === "start_track") {
+    //   const room = rooms.find((r) => r.roomId === msg.roomId);
+    //   const startAtServerMs = Date.now() + 1500;
+    //   room.hlsUrl = msg.track.hlsUrl;
+    //   room.trackId = msg.track.id;
+    //   room.trackName = msg.track.name;
+    //   room.thumbnail = msg.track.thumbnail;
+    //   room.basePositionSeconds = 0;
+    //   room.startAtServerMs = startAtServerMs;
+    //   room.isPlaying = true;
+    //   broadcastRoom(msg.roomId, {
+    //     type: "play_track",
+    //     room,
+    //     positionSeconds: 0,
+    //     startAtServerMs,
+    //   });
+    // } else if (msg.type === "pause_track") {
+    //   const room = rooms.find((r) => r.roomId === msg.roomId);
+    //   const now = Date.now();
+    //   if (room.isPlaying) {
+    //     room.basePositionSeconds += (now - room.startAtServerMs) / 1000;
+    //     room.isPlaying = false;
+    //   }
+    //   broadcastRoom(msg.roomId, { type: "pause_track", room });
+    // } else if (msg.type === "resume_track") {
+    //   const room = rooms.find((r) => r.roomId === msg.roomId);
+    //   const startAtServerMs = Date.now() + 1500;
+    //   room.startAtServerMs = startAtServerMs;
+    //   room.isPlaying = true;
+    //   broadcastRoom(msg.roomId, {
+    //     type: "resume_track",
+    //     room,
+    //     startAtServerMs,
+    //     positionSeconds: room.basePositionSeconds,
+    //   });
+    // }
   });
 });
+
+setupRoomSocket(wss);
 
 function pushScheduleToAllClients() {
   const now = Date.now();
