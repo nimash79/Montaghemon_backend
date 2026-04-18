@@ -162,7 +162,7 @@ app.get("/api/schedule", (req, res) => {
 });
 
 app.use(
-  "/hls",
+  "/api/hls",
   express.static(MEDIA_HLS_DIR, {
     etag: true,
     lastModified: true,
@@ -174,7 +174,7 @@ app.use(
 );
 
 app.use(
-  "/thumbnail",
+  "/api/thumbnail",
   express.static(MEDIA_THUMBNAIL_DIR, {
     etag: true,
     lastModified: true,
@@ -183,7 +183,7 @@ app.use(
 );
 
 app.use(
-  "/logo",
+  "/api/logo",
   express.static(ROOM_LOGO_DIR, {
     etag: true,
     lastModified: true,
@@ -195,7 +195,7 @@ const server = app.listen(PORT, () => {
   console.log(`Server: ${PUBLIC_BASE_URL}`);
 });
 
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({ server, path: "/api/ws" });
 const onlineClients = new Set();
 
 function broadcast(obj) {
