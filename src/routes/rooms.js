@@ -47,11 +47,12 @@ router.get("/", async (req, res) => {
 
 router.post("/create", async (req, res) => {
   try {
-    const { name, password } = req.body;
+    const { name, password, logo } = req.body;
 
-    if (!name) {
+    if (!name)
       return res.status(400).json({ error: "name is required" });
-    }
+    if (!password)
+      return res.status(400).json({ error: "password is required" });
 
     const lastRoom = await Room.findOne().sort({ roomId: -1 });
     const roomId = lastRoom ? lastRoom.roomId + 1 : 1;
@@ -66,6 +67,7 @@ router.post("/create", async (req, res) => {
       roomId,
       name,
       password: hashedPassword,
+      logo,
     });
 
     return res.status(201).json({
