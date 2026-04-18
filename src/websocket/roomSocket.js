@@ -76,7 +76,7 @@ export function setupRoomSocket(wss) {
 
       // start track
       else if (msg.type === "start_track") {
-        const startAtServerMs = Date.now() + 1500;
+        const startAtServerMs = Date.now() + 500;
 
         const room = await updateRoom(msg.roomId, {
           hlsUrl: msg.track.hlsUrl,
@@ -88,12 +88,14 @@ export function setupRoomSocket(wss) {
           isPlaying: true,
         });
 
-        broadcastRoom(wss, msg.roomId, {
-          type: "play_track",
-          room,
-          positionSeconds: 0,
-          startAtServerMs,
-        });
+        setTimeout(() => {
+          broadcastRoom(wss, msg.roomId, {
+            type: "play_track",
+            room,
+            positionSeconds: 0,
+            startAtServerMs,
+          });
+        }, 500);
       }
 
       // pause

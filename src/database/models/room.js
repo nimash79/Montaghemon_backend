@@ -29,6 +29,11 @@ const RoomSchema = new mongoose.Schema(
       default: "",
     },
 
+    trackId: {
+      type: Number,
+      default: 0,
+    },
+
     trackName: {
       type: String,
       default: "",
