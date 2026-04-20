@@ -58,6 +58,7 @@ let forced = null;
 
 let lastDb = readJsonSafe(DB_PATH, { tracks: {} });
 let lastTracks = buildOrderedTracks(lastDb);
+console.log(`DB tracks: ${lastTracks.length}`);
 
 async function rebuild() {
   lastDb = await scanAndBuild({
@@ -115,7 +116,8 @@ app.post("/api/client-log", (req, res) => {
 });
 
 app.get("/api/tracks", (req, res) => {
-  let tracks = lastTracks.map((t) => ({
+  let tracks = buildOrderedTracks(lastDb, true);
+  tracks = tracks.map((t) => ({
     ...t,
     thumbnail: PUBLIC_BASE_URL + t.thumbnail,
     hlsUrl: PUBLIC_BASE_URL + t.hlsRel,
@@ -287,62 +289,6 @@ wss.on("connection", (ws, req) => {
         schedule: schedule2,
       });
     }
-    //  else if (msg.type === "join_room") {
-    //   ws.roomId = msg.roomId;
-    //   const room = rooms.find((r) => r.roomId === msg.roomId);
-    //   const now = Date.now();
-    //   let position = room.basePositionSeconds;
-    //   if (room.isPlaying) {
-    //     position += (now - room.startAtServerMs) / 1000;
-    //   }
-    //   send(ws, {
-    //     type: "join_room",
-    //     room,
-    //     track: {
-    //       id: room.trackId,
-    //       name: room.trackName,
-    //       thumbnail: room.thumbnail,
-    //       hlsUrl: room.hlsUrl,
-    //     },
-    //     positionSeconds: position,
-    //     startAtServerMs: room.startAtServerMs,
-    //   });
-    // } else if (msg.type === "start_track") {
-    //   const room = rooms.find((r) => r.roomId === msg.roomId);
-    //   const startAtServerMs = Date.now() + 1500;
-    //   room.hlsUrl = msg.track.hlsUrl;
-    //   room.trackId = msg.track.id;
-    //   room.trackName = msg.track.name;
-    //   room.thumbnail = msg.track.thumbnail;
-    //   room.basePositionSeconds = 0;
-    //   room.startAtServerMs = startAtServerMs;
-    //   room.isPlaying = true;
-    //   broadcastRoom(msg.roomId, {
-    //     type: "play_track",
-    //     room,
-    //     positionSeconds: 0,
-    //     startAtServerMs,
-    //   });
-    // } else if (msg.type === "pause_track") {
-    //   const room = rooms.find((r) => r.roomId === msg.roomId);
-    //   const now = Date.now();
-    //   if (room.isPlaying) {
-    //     room.basePositionSeconds += (now - room.startAtServerMs) / 1000;
-    //     room.isPlaying = false;
-    //   }
-    //   broadcastRoom(msg.roomId, { type: "pause_track", room });
-    // } else if (msg.type === "resume_track") {
-    //   const room = rooms.find((r) => r.roomId === msg.roomId);
-    //   const startAtServerMs = Date.now() + 1500;
-    //   room.startAtServerMs = startAtServerMs;
-    //   room.isPlaying = true;
-    //   broadcastRoom(msg.roomId, {
-    //     type: "resume_track",
-    //     room,
-    //     startAtServerMs,
-    //     positionSeconds: room.basePositionSeconds,
-    //   });
-    // }
   });
 });
 

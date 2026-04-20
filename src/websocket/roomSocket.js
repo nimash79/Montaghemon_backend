@@ -66,6 +66,7 @@ export function setupRoomSocket(wss) {
           track: {
             id: room.trackId,
             name: room.trackName,
+            singer: room.trackSinger,
             thumbnail: room.thumbnail,
             hlsUrl: room.hlsUrl,
           },
@@ -82,6 +83,7 @@ export function setupRoomSocket(wss) {
           hlsUrl: msg.track.hlsUrl,
           trackId: msg.track.id,
           trackName: msg.track.name,
+          trackSinger: msg.track.singer,
           thumbnail: msg.track.thumbnail,
           basePositionSeconds: 0,
           startAtServerMs,

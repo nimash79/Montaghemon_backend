@@ -51,11 +51,13 @@ export async function scanAndBuild({
     db.tracks[key] = {
       file,
       name: key.replace(/\.mp3$/i, ""),
+      singer: "",
       durationMs,
       mtimeMs: st.mtimeMs,
       size: st.size,
       thumbnail: `/thumbnail/${encodeURIComponent(key.replace(/\.mp3$/i, ".webp"))}`,
-      hlsRel: `/hls/${encodeURIComponent(key.replace(/\.mp3$/i, ""))}/index.m3u8`
+      hlsRel: `/hls/${encodeURIComponent(key.replace(/\.mp3$/i, ""))}/index.m3u8`,
+      disabled: false,
     };
 
     writeJsonAtomic(dbPath, db);

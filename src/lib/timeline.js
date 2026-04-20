@@ -1,11 +1,15 @@
-export function buildOrderedTracks(db) {
-  const all = Object.entries(db.tracks).map(([key, t]) => ({
+export function buildOrderedTracks(db, includeDisables = false) {
+  let all = Object.entries(db.tracks).map(([key, t]) => ({
     id: key,
     name: t.name,
+    singer: t.singer,
     thumbnail: t.thumbnail,
     durationMs: t.durationMs,
     hlsRel: t.hlsRel,
+    disabled: t.disabled,
   }));
+
+  if (!includeDisables) all = all.filter((t) => !t.disabled);
 
   return all;
 }
@@ -33,6 +37,7 @@ export function getScheduleAround({ tracks, epochMs, nowMs, lookAheadMs }) {
     schedule.push({
       trackId: tr.id,
       trackName: tr.name,
+      trackSinger: tr.singer,
       thumbnail: tr.thumbnail,
       startMs: cursorStartMs,
       endMs: cursorStartMs + tr.durationMs,

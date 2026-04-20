@@ -39,6 +39,11 @@ const RoomSchema = new mongoose.Schema(
       default: "",
     },
 
+    trackSinger: {
+      type: String,
+      default: "",
+    },
+
     thumbnail: {
       type: String,
       default: "",
