@@ -5,6 +5,7 @@ dotenv.config();
 
 import Room from "../database/models/room.js";
 import { getRoomMembers } from "../presence/roomPresence.js";
+import { requireAdmin } from "../lib/adminAuth.js";
 
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL;
 
@@ -19,6 +20,7 @@ router.get("/", async (req, res) => {
         roomId: 1,
         name: 1,
         logo: 1,
+        city: 1,
         thumbnail: 1,
         trackName: 1,
         isPlaying: 1,
@@ -45,9 +47,9 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/create", async (req, res) => {
+router.post("/create", requireAdmin, async (req, res) => {
   try {
-    const { name, password, logo } = req.body;
+    const { name, password, logo, city } = req.body;
 
     if (!name)
       return res.status(400).json({ error: "name is required" });
@@ -68,12 +70,15 @@ router.post("/create", async (req, res) => {
       name,
       password: hashedPassword,
       logo,
+      city,
     });
 
     return res.status(201).json({
       ok: true,
       roomId: room.roomId,
       name: room.name,
+      logo,
+      city,
     });
   } catch (error) {
     console.error("Create room error:", error);

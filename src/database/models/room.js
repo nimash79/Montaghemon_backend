@@ -19,6 +19,11 @@ const RoomSchema = new mongoose.Schema(
       default: "/logo/default.webp",
     },
 
+    city: {
+      type: String,
+      default: "",
+    },
+
     password: {
       type: String,
       default: null,
