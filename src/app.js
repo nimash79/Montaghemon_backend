@@ -131,7 +131,7 @@ app.get("/api/tracks", (req, res) => {
       ),
   );
 
-  const tracksWithId = tracks.map((t, i) => ({
+  const tracksWithId = tracks.reverse().map((t, i) => ({
     ...t,
     id: i,
   }));
