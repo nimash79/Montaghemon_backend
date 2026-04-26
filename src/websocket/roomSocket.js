@@ -127,7 +127,7 @@ export function setupRoomSocket(wss) {
 
       // resume
       else if (msg.type === "resume_track") {
-        const startAtServerMs = Date.now() + 1500;
+        const startAtServerMs = Date.now() + 500;
 
         const room = await updateRoom(msg.roomId, {
           startAtServerMs,
