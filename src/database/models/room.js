@@ -59,7 +59,7 @@ const RoomSchema = new mongoose.Schema(
       default: "",
     },
 
-    basePositionSeconds: {
+    basePositionMs: {
       type: Number,
       default: 0,
     },

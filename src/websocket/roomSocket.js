@@ -85,7 +85,7 @@ export function setupRoomSocket(wss) {
           trackName: msg.track.name,
           trackSinger: msg.track.singer,
           thumbnail: msg.track.thumbnail,
-          basePositionSeconds: 0,
+          basePositionMs: 0,
           startAtServerMs,
           isPlaying: true,
         });
@@ -94,7 +94,7 @@ export function setupRoomSocket(wss) {
           broadcastRoom(wss, msg.roomId, {
             type: "play_track",
             room,
-            positionSeconds: 0,
+            positionMs: 0,
             startAtServerMs,
           });
         }, 500);
@@ -108,14 +108,12 @@ export function setupRoomSocket(wss) {
 
         const now = Date.now();
 
-        let basePosition = room.basePositionSeconds;
+        let basePosition = room.basePositionMs;
 
-        if (room.isPlaying) {
-          basePosition += (now - room.startAtServerMs) / 1000;
-        }
+        if (room.isPlaying) basePosition += now - room.startAtServerMs;
 
         const updated = await updateRoom(msg.roomId, {
-          basePositionSeconds: basePosition,
+          basePositionMs: basePosition,
           isPlaying: false,
         });
 
@@ -137,8 +135,6 @@ export function setupRoomSocket(wss) {
         broadcastRoom(wss, msg.roomId, {
           type: "resume_track",
           room,
-          startAtServerMs,
-          positionSeconds: room.basePositionSeconds,
         });
       }
 
@@ -149,9 +145,7 @@ export function setupRoomSocket(wss) {
           type: "room_members",
           count: getRoomMembers(ws.roomId),
         });
-      }
-
-      else if (msg.type === "send_message") {
+      } else if (msg.type === "send_message") {
         let room = await getRoom(ws.roomId);
         if (!room) return;
 
