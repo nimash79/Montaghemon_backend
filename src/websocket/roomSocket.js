@@ -150,6 +150,21 @@ export function setupRoomSocket(wss) {
           count: getRoomMembers(ws.roomId),
         });
       }
+
+      else if (msg.type === "send_message") {
+        let room = await getRoom(ws.roomId);
+        if (!room) return;
+
+        room = await updateRoom(ws.roomId, {
+          message: msg.message,
+        });
+
+        broadcastRoom(wss, ws.roomId, {
+          type: "get_message",
+          room: room,
+          message: msg.message,
+        });
+      }
     });
   });
 }

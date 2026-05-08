@@ -24,6 +24,11 @@ const RoomSchema = new mongoose.Schema(
       default: "",
     },
 
+    message: {
+      type: String,
+      default: "",
+    },
+
     password: {
       type: String,
       default: null,
