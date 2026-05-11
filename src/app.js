@@ -11,6 +11,7 @@ import { buildOrderedTracks, getScheduleAround } from "./lib/timeline.js";
 import { readJsonSafe } from "./lib/util.js";
 import connectDB from "./database/index.js";
 import roomRoutes from "./routes/rooms.js";
+import trackRoutes from "./routes/tracks.js";
 import { setupRoomSocket } from "./websocket/roomSocket.js";
 
 import dotenv from "dotenv";
@@ -41,6 +42,10 @@ const MEDIA_THUMBNAIL_DIR = path.resolve(
 const ROOM_LOGO_DIR = path.resolve(
   __dirname,
   env("ROOM_LOGO_DIR", "../media/logo"),
+);
+const CATEGORY_DIR = path.resolve(
+  __dirname,
+  env("CATEGORY_DIR", "../media/category"),
 );
 const DB_PATH = path.resolve(__dirname, env("DB_PATH", "../media/db.json"));
 
@@ -88,6 +93,7 @@ fs.mkdirSync(LOG_DIR, { recursive: true });
 connectDB();
 
 app.use("/api/rooms", roomRoutes);
+app.use("/api/tracks", trackRoutes);
 
 function appendLogLine(line) {
   const file = path.join(
@@ -113,34 +119,6 @@ app.post("/api/client-log", (req, res) => {
   }
 
   res.json({ ok: true });
-});
-
-app.get("/api/tracks", (req, res) => {
-  let tracks = buildOrderedTracks(lastDb, true);
-  tracks = tracks.map((t) => ({
-    ...t,
-    thumbnail: PUBLIC_BASE_URL + t.thumbnail,
-    hlsUrl: PUBLIC_BASE_URL + t.hlsRel,
-  }));
-
-  tracks = tracks.filter(
-    (track, index, arr) =>
-      index ===
-      arr.findIndex(
-        (t) => t.thumbnail === track.thumbnail && t.name === track.name,
-      ),
-  );
-
-  const tracksWithId = tracks.reverse().map((t, i) => ({
-    ...t,
-    id: i,
-  }));
-
-  res.json({
-    ok: true,
-    total: tracks.length,
-    tracks: tracksWithId,
-  });
 });
 
 app.get("/api/health", (req, res) => {
@@ -198,11 +176,27 @@ app.use(
   }),
 );
 
+app.use(
+  "/api/category",
+  express.static(CATEGORY_DIR, {
+    etag: true,
+    lastModified: true,
+    maxAge: "10m",
+  }),
+);
+
 const server = app.listen(PORT, () => {
   console.log(`Server: ${PUBLIC_BASE_URL}`);
 });
 
-const wss = new WebSocketServer({ server, path: "/api/ws" });
+const wss = new WebSocketServer({
+  server,
+  path: "/api/ws",
+  perMessageDeflate: false,
+  clientTracking: true,
+  maxPayload: 1024 * 1024,
+});
+
 const onlineClients = new Set();
 
 function broadcast(obj) {
@@ -222,6 +216,8 @@ function send(ws, obj) {
 
 wss.on("connection", (ws, req) => {
   console.log("WS connected from:", req.socket.remoteAddress);
+  ws._socket.setNoDelay(true);
+  ws._socket.setKeepAlive(true, 10000);
   onlineClients.add(ws);
   broadcastOnlineCount();
 

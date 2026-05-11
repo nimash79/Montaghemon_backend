@@ -73,6 +73,13 @@ const RoomSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    favorites: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Track",
+      },
+    ],
   },
   {
     timestamps: true,
