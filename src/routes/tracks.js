@@ -1,5 +1,8 @@
 import express from "express";
 import bcrypt from "bcrypt";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -10,6 +13,43 @@ import { requireAdmin } from "../lib/adminAuth.js";
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL;
 
 const router = express.Router();
+
+const thumbnailDir = "media/thumbnail";
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, thumbnailDir);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname);
+
+    if (!req.body.hls)
+      return cb(new Error("hls is required"));
+
+    const fileName = `${req.body.hls}${ext}`;
+
+    const fullPath = path.join(thumbnailDir, fileName);
+
+    if (fs.existsSync(fullPath))
+      return cb(new Error("Thumbnail already exists"));
+
+    cb(null, fileName);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Only jpg, jpeg, png, webp files are allowed"));
+    }
+    cb(null, true);
+  },
+});
 
 router.get("/", async (req, res) => {
   try {
@@ -28,13 +68,8 @@ router.get("/", async (req, res) => {
       singer: (t.singers || [])
         .map((s) => s?.name)
         .filter(Boolean)
-        .join("، "), // یا ", "
+        .join("، "),
     }));
-
-    // const tracksWithId = tracks.reverse().map((t, i) => ({
-    //   ...t,
-    //   id: i,
-    // }));
 
     res.json({
       ok: true,
@@ -50,43 +85,83 @@ router.get("/", async (req, res) => {
   }
 });
 
-// router.post("/create", requireAdmin, async (req, res) => {
-//   try {
-//     const { category, name, singer, durationMs, mtimeMs, size, thumbnail, hlsRel, disabled } = req.body;
+router.post("/create", requireAdmin, (req, res) => {
+  upload.single("thumbnail")(req, res, async function (err) {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+      });
+    }
 
-//     if (!name) return res.status(400).json({ error: "name is required" });
-//     if (!password)
-//       return res.status(400).json({ error: "password is required" });
+    try {
+      const {
+        category,
+        name,
+        singers,
+        durationMs,
+        mtimeMs,
+        hls,
+        size,
+        disabled,
+      } = req.body;
 
-//     const lastRoom = await Room.findOne().sort({ roomId: -1 });
-//     const roomId = lastRoom ? lastRoom.roomId + 1 : 1;
+      // validations
+      // if (!category || typeof category !== "string") {
+      //   return res.status(400).json({ error: "category is required" });
+      // }
 
-//     let hashedPassword = null;
+      if (!name || typeof name !== "string") {
+        return res.status(400).json({ error: "name is required" });
+      }
 
-//     if (password) {
-//       hashedPassword = await bcrypt.hash(password, 10);
-//     }
+      if (!hls || typeof hls !== "string") {
+        return res.status(400).json({ error: "hls is required" });
+      }
 
-//     const room = await Room.create({
-//       roomId,
-//       name,
-//       password: hashedPassword,
-//       logo,
-//       city,
-//     });
+      if (!singers) {
+        return res.status(400).json({ error: "singers is required" });
+      }
 
-//     return res.status(201).json({
-//       ok: true,
-//       roomId: room.roomId,
-//       name: room.name,
-//       logo,
-//       city,
-//     });
-//   } catch (error) {
-//     console.error("Create room error:", error);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// });
+      if (durationMs == null || isNaN(Number(durationMs))) {
+        return res
+          .status(400)
+          .json({ error: "durationMs must be a valid number" });
+      }
+
+      if (mtimeMs == null || isNaN(Number(mtimeMs))) {
+        return res
+          .status(400)
+          .json({ error: "mtimeMs must be a valid number" });
+      }
+
+      if (size == null || isNaN(Number(size))) {
+        return res.status(400).json({ error: "size must be a valid number" });
+      }
+
+      const track = await Track.create({
+        // category: category.trim(),
+        name: name.trim(),
+        singers,
+        durationMs: Number(durationMs),
+        mtimeMs: Number(mtimeMs),
+        size: Number(size),
+        thumbnail: `/thumbnail/${req.file ? hls + path.extname(req.file.filename) : "placeholder.webp"}`,
+        hlsRel: `/hls/${hls}/index.m3u8`,
+        disabled,
+      });
+
+      return res.status(201).json({
+        ok: true,
+        message: "Track created successfully",
+        track,
+      });
+    } catch (error) {
+      console.error("Create track error:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+});
 
 router.post("/add-favorite", async (req, res) => {
   try {

@@ -12,6 +12,7 @@ import { readJsonSafe } from "./lib/util.js";
 import connectDB from "./database/index.js";
 import roomRoutes from "./routes/rooms.js";
 import trackRoutes from "./routes/tracks.js";
+import singerRoutes from "./routes/singers.js";
 import { setupRoomSocket } from "./websocket/roomSocket.js";
 
 import dotenv from "dotenv";
@@ -94,6 +95,7 @@ connectDB();
 
 app.use("/api/rooms", roomRoutes);
 app.use("/api/tracks", trackRoutes);
+app.use("/api/singers", singerRoutes);
 
 function appendLogLine(line) {
   const file = path.join(
