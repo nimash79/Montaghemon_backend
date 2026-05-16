@@ -108,7 +108,7 @@ router.post("/create", requireAdmin, async (req, res) => {
         roomId,
         name,
         password: hashedPassword,
-        logo: `/logo/${req.file.originalname}`,
+        logo: req.file ? `/logo/${req.file.originalname}` : "/logo/default.webp",
         city,
       });
 
@@ -116,7 +116,7 @@ router.post("/create", requireAdmin, async (req, res) => {
         ok: true,
         roomId: room.roomId,
         name: room.name,
-        logo: `/logo/${req.file.originalname}`,
+        logo: req.file ? `/logo/${req.file.originalname}` : "/logo/default.webp",
         city,
       });
     } catch (error) {

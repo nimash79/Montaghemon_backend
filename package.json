@@ -4,7 +4,7 @@
     "main": "app.js",
     "scripts": {
         "dev": "nodemon ./src/app.js",
-        "shuffle": "node ./src/shuffle.js ./media/db.json"
+        "build_track": "node ./src/build_track.js"
     },
     "dependencies": {
         "bcrypt": "^6.0.0",

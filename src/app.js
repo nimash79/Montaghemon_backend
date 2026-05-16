@@ -14,6 +14,7 @@ import roomRoutes from "./routes/rooms.js";
 import trackRoutes from "./routes/tracks.js";
 import singerRoutes from "./routes/singers.js";
 import { setupRoomSocket } from "./websocket/roomSocket.js";
+import Track from "./database/models/track.js";
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -52,7 +53,6 @@ const SINGERS_DIR = path.resolve(
   __dirname,
   env("SINGERS_DIR", "../media/singers"),
 );
-const DB_PATH = path.resolve(__dirname, env("DB_PATH", "../media/db.json"));
 
 const FFMPEG = env("FFMPEG", "ffmpeg");
 const FFPROBE = env("FFPROBE", "ffprobe");
@@ -63,29 +63,7 @@ const HLS_LIST_SIZE = Number(env("HLS_LIST_SIZE", "12"));
 const EPOCH_MS = Number(env("EPOCH_MS", "1710000000000"));
 const LOOKAHEAD_MS = 10 * 60_000;
 
-let forced = null;
-// forced = { trackId, name, thumbnail, hlsUrl, atServerMs }
-
-let lastDb = readJsonSafe(DB_PATH, { tracks: {} });
-let lastTracks = buildOrderedTracks(lastDb);
-console.log(`DB tracks: ${lastTracks.length}`);
-
-async function rebuild() {
-  lastDb = await scanAndBuild({
-    inputDir: MEDIA_INPUT_DIR,
-    hlsDir: MEDIA_HLS_DIR,
-    dbPath: DB_PATH,
-    ffmpegPath: FFMPEG,
-    ffprobePath: FFPROBE,
-    segmentTimeSec: SEGMENT_TIME,
-    listSize: HLS_LIST_SIZE,
-  });
-  lastTracks = buildOrderedTracks(lastDb);
-  console.log(`DB tracks: ${lastTracks.length}`);
-}
-
-// await rebuild();
-lastTracks = buildOrderedTracks(lastDb);
+let allTracks = [];
 
 const app = express();
 app.use(cors());
@@ -130,7 +108,7 @@ app.post("/api/client-log", (req, res) => {
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
-    tracks: lastTracks.length,
+    tracks: allTracks.length,
     nowServerMs: Date.now(),
     epochMs: EPOCH_MS,
     online: onlineClients.size,
@@ -140,7 +118,7 @@ app.get("/api/health", (req, res) => {
 app.get("/api/schedule", (req, res) => {
   const now = Date.now();
   const schedule = getScheduleAround({
-    tracks: lastTracks,
+    tracks: allTracks.filter((t) => !t.disabled),
     epochMs: EPOCH_MS,
     nowMs: now,
     lookAheadMs: LOOKAHEAD_MS,
@@ -248,7 +226,7 @@ wss.on("connection", (ws, req) => {
   });
   const now = Date.now();
   const schedule = getScheduleAround({
-    tracks: lastTracks,
+    tracks: allTracks.filter((t) => !t.disabled),
     epochMs: EPOCH_MS,
     nowMs: now,
     lookAheadMs: LOOKAHEAD_MS,
@@ -263,7 +241,6 @@ wss.on("connection", (ws, req) => {
     nowServerMs: now,
     epochMs: EPOCH_MS,
     schedule,
-    forced,
   });
 
   ws.on("message", (buf) => {
@@ -284,7 +261,7 @@ wss.on("connection", (ws, req) => {
     } else if (msg.type === "need_schedule") {
       const now2 = Date.now();
       const schedule2 = getScheduleAround({
-        tracks: lastTracks,
+        tracks: allTracks.filter((t) => !t.disabled),
         epochMs: EPOCH_MS,
         nowMs: now2,
         lookAheadMs: LOOKAHEAD_MS,
@@ -308,29 +285,7 @@ setupRoomSocket(wss);
 function pushScheduleToAllClients() {
   const now = Date.now();
   const schedule = getScheduleAround({
-    tracks: lastTracks,
-    epochMs: EPOCH_MS,
-    nowMs: now,
-    lookAheadMs: LOOKAHEAD_MS,
-  }).map((s) => ({ ...s, hlsUrl: PUBLIC_BASE_URL + s.hlsUrl }));
-
-  const payload = JSON.stringify({
-    type: "schedule",
-    nowServerMs: now,
-    epochMs: EPOCH_MS,
-    schedule,
-    forced,
-  });
-  for (const ws of wss.clients) {
-    if (ws.readyState === 1) ws.send(payload);
-  }
-}
-
-// هر 15 ثانیه schedule push
-setInterval(() => {
-  const now = Date.now();
-  const schedule = getScheduleAround({
-    tracks: lastTracks,
+    tracks: allTracks.filter((t) => !t.disabled),
     epochMs: EPOCH_MS,
     nowMs: now,
     lookAheadMs: LOOKAHEAD_MS,
@@ -349,4 +304,27 @@ setInterval(() => {
   for (const ws of wss.clients) {
     if (ws.readyState === 1) ws.send(payload);
   }
+}
+
+setTimeout(async () => {
+  allTracks = await Track.find({}).populate("singers").sort({ updatedAt: -1 }).lean();
+  allTracks = allTracks.map((t) => ({
+    ...t,
+    singer: (t.singers || [])
+      .map((s) => s?.name)
+      .filter(Boolean)
+      .join("، "),
+  }));
+}, 500);
+
+setInterval(async () => {
+  allTracks = await Track.find({}).populate("singers").sort({ updatedAt: -1 }).lean();
+  allTracks = allTracks.map((t) => ({
+    ...t,
+    singer: (t.singers || [])
+      .map((s) => s?.name)
+      .filter(Boolean)
+      .join("، "),
+  }));
+  pushScheduleToAllClients();
 }, 15_000);
