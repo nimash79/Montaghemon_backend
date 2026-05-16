@@ -48,6 +48,10 @@ const CATEGORY_DIR = path.resolve(
   __dirname,
   env("CATEGORY_DIR", "../media/category"),
 );
+const SINGERS_DIR = path.resolve(
+  __dirname,
+  env("SINGERS_DIR", "../media/singers"),
+);
 const DB_PATH = path.resolve(__dirname, env("DB_PATH", "../media/db.json"));
 
 const FFMPEG = env("FFMPEG", "ffmpeg");
@@ -181,6 +185,15 @@ app.use(
 app.use(
   "/api/category",
   express.static(CATEGORY_DIR, {
+    etag: true,
+    lastModified: true,
+    maxAge: "10m",
+  }),
+);
+
+app.use(
+  "/api/singers",
+  express.static(SINGERS_DIR, {
     etag: true,
     lastModified: true,
     maxAge: "10m",

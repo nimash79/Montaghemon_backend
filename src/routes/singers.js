@@ -1,5 +1,8 @@
 import express from "express";
 import bcrypt from "bcrypt";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -10,6 +13,37 @@ import { requireAdmin } from "../lib/adminAuth.js";
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL;
 
 const router = express.Router();
+
+const singersDir = "media/singers";
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, singersDir);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname);
+
+    const fullPath = path.join(singersDir, file.originalname);
+
+    if (fs.existsSync(fullPath)) return cb(new Error("Image already exists"));
+
+    cb(null, file.originalname);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(new Error("Only jpg, jpeg, png, webp files are allowed"));
+    }
+    cb(null, true);
+  },
+});
 
 router.get("/", async (req, res) => {
   try {
@@ -29,42 +63,36 @@ router.get("/", async (req, res) => {
   }
 });
 
-// router.post("/create", requireAdmin, async (req, res) => {
-//   try {
-//     const { category, name, singer, durationMs, mtimeMs, size, thumbnail, hlsRel, disabled } = req.body;
+router.post("/create", requireAdmin, async (req, res) => {
+  upload.single("image")(req, res, async function (err) {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    try {
+      const { name, description } = req.body;
 
-//     if (!name) return res.status(400).json({ error: "name is required" });
-//     if (!password)
-//       return res.status(400).json({ error: "password is required" });
+      if (!name) return res.status(400).json({ error: "name is required" });
 
-//     const lastRoom = await Room.findOne().sort({ roomId: -1 });
-//     const roomId = lastRoom ? lastRoom.roomId + 1 : 1;
+      const singer = await Singer.create({
+        name,
+        description,
+        image: req.file ? `/logo/${req.file.originalname}` : "/singers/default.png",
+      });
 
-//     let hashedPassword = null;
-
-//     if (password) {
-//       hashedPassword = await bcrypt.hash(password, 10);
-//     }
-
-//     const room = await Room.create({
-//       roomId,
-//       name,
-//       password: hashedPassword,
-//       logo,
-//       city,
-//     });
-
-//     return res.status(201).json({
-//       ok: true,
-//       roomId: room.roomId,
-//       name: room.name,
-//       logo,
-//       city,
-//     });
-//   } catch (error) {
-//     console.error("Create room error:", error);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// });
+      return res.status(201).json({
+        ok: true,
+        name: singer.name,
+        description: singer.description,
+        logo: req.file ? `/logo/${req.file.originalname}` : "/singers/default.png",
+      });
+    } catch (error) {
+      console.error("Create singer error:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+});
 
 export default router;
