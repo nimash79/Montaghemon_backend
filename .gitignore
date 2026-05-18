@@ -3,4 +3,5 @@ package-lock.json
 *.zip
 media/
 logs/
+stats.html
 .env

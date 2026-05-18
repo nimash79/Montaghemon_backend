@@ -151,12 +151,12 @@ export function setupRoomSocket(wss) {
 
         room = await updateRoom(ws.roomId, {
           message: msg.message,
+          link: msg.link,
         });
 
         broadcastRoom(wss, ws.roomId, {
           type: "get_message",
           room: room,
-          message: msg.message,
         });
       }
     });
