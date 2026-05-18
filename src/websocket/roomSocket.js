@@ -38,7 +38,6 @@ export function setupRoomSocket(wss) {
         return;
       }
 
-      // join room
       if (msg.type === "join_room") {
         ws.roomId = msg.roomId;
 
@@ -73,10 +72,7 @@ export function setupRoomSocket(wss) {
           positionSeconds: position,
           startAtServerMs: room.startAtServerMs,
         });
-      }
-
-      // start track
-      else if (msg.type === "start_track") {
+      } else if (msg.type === "start_track") {
         const startAtServerMs = Date.now() + 500;
 
         const room = await updateRoom(msg.roomId, {
@@ -98,10 +94,7 @@ export function setupRoomSocket(wss) {
             startAtServerMs,
           });
         }, 500);
-      }
-
-      // pause
-      else if (msg.type === "pause_track") {
+      } else if (msg.type === "pause_track") {
         const room = await getRoom(msg.roomId);
 
         if (!room) return;
@@ -121,10 +114,7 @@ export function setupRoomSocket(wss) {
           type: "pause_track",
           room: updated,
         });
-      }
-
-      // resume
-      else if (msg.type === "resume_track") {
+      } else if (msg.type === "resume_track") {
         const startAtServerMs = Date.now() + 500;
 
         const room = await updateRoom(msg.roomId, {
@@ -136,10 +126,7 @@ export function setupRoomSocket(wss) {
           type: "resume_track",
           room,
         });
-      }
-
-      // leave
-      else if (msg.type === "leave_room") {
+      } else if (msg.type === "leave_room") {
         removeMember(ws.roomId, ws);
         broadcastRoom(wss, ws.roomId, {
           type: "room_members",
@@ -158,6 +145,11 @@ export function setupRoomSocket(wss) {
           type: "get_message",
           room: room,
         });
+      } else if (msg.type === "set_volume") {
+        broadcastRoom(wss, ws.roomId, {
+          type: "get_volume",
+          volume: msg.volume,
+        })
       }
     });
   });
