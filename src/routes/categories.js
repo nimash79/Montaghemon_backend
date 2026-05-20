@@ -23,15 +23,13 @@ const storage = multer.diskStorage({
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname);
 
-    if (!req.body.hls)
-      return cb(new Error("hls is required"));
+    if (!req.body.hls) return cb(new Error("hls is required"));
 
     const fileName = `${req.body.hls}${ext}`;
 
     const fullPath = path.join(categoriesDir, fileName);
 
-    if (fs.existsSync(fullPath))
-      return cb(new Error("Image already exists"));
+    if (fs.existsSync(fullPath)) return cb(new Error("Image already exists"));
 
     cb(null, fileName);
   },
@@ -53,8 +51,14 @@ const upload = multer({
 
 router.get("/", async (req, res) => {
   try {
-    const categories = await Category.find({})
-      .sort({ updatedAt: -1 });
+    let { all, disabled } = req.query;
+    all = all === "true";
+    disabled = disabled === "true";
+    let categories = await Category.find(all ? {} : { disabled }).lean();
+    categories = categories.map((category) => ({
+      ...category,
+      image: PUBLIC_BASE_URL + category.image,
+    }));
 
     res.json({
       ok: true,

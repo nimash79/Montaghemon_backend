@@ -23,15 +23,14 @@ const storage = multer.diskStorage({
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname);
 
-    if (!req.body.hls)
-      return cb(new Error("hls is required"));
+    if (!req.body.hls) return cb(new Error("hls is required"));
 
     const fileName = `${req.body.hls}${ext}`;
 
     const fullPath = path.join(thumbnailDir, fileName);
 
-    if (fs.existsSync(fullPath))
-      return cb(new Error("Thumbnail already exists"));
+    // if (fs.existsSync(fullPath))
+    //   return cb(new Error("Thumbnail already exists"));
 
     cb(null, fileName);
   },
@@ -253,6 +252,110 @@ router.post("/remove-favorite", async (req, res) => {
       error: "Server error",
     });
   }
+});
+
+router.get("/get-track/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const track = await Track.findById(id).populate("categories").populate("singers");
+
+    res.json({
+      ok: true,
+      track,
+    });
+  } catch (error) {
+    console.error("Get track error:", error);
+    res.status(500).json({
+      ok: false,
+      error: "Server error",
+    });
+  }
+});
+
+router.post("/edit", requireAdmin, (req, res) => {
+  upload.single("thumbnail")(req, res, async function (err) {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+      });
+    }
+
+    try {
+      const {
+        id,
+        categories,
+        name,
+        singers,
+        durationMs,
+        mtimeMs,
+        hls,
+        size,
+        disabled,
+      } = req.body;
+
+      // validations
+      if (!categories) {
+        return res.status(400).json({ error: "category is required" });
+      }
+
+      if (!name || typeof name !== "string") {
+        return res.status(400).json({ error: "name is required" });
+      }
+
+      if (!hls || typeof hls !== "string") {
+        return res.status(400).json({ error: "hls is required" });
+      }
+
+      if (!singers) {
+        return res.status(400).json({ error: "singers is required" });
+      }
+
+      if (durationMs == null || isNaN(Number(durationMs))) {
+        return res
+          .status(400)
+          .json({ error: "durationMs must be a valid number" });
+      }
+
+      if (mtimeMs == null || isNaN(Number(mtimeMs))) {
+        return res
+          .status(400)
+          .json({ error: "mtimeMs must be a valid number" });
+      }
+
+      if (size == null || isNaN(Number(size))) {
+        return res.status(400).json({ error: "size must be a valid number" });
+      }
+
+      const track = await Track.updateOne(
+        {
+          _id: id,
+        },
+        {
+          $set: {
+            name: name.trim(),
+            categories,
+            singers,
+            durationMs: Number(durationMs),
+            mtimeMs: Number(mtimeMs),
+            size: Number(size),
+            thumbnail: `/thumbnail/${req.file ? hls + path.extname(req.file.filename) : "placeholder.webp"}`,
+            hlsRel: `/hls/${hls}/index.m3u8`,
+            disabled,
+          },
+        },
+      );
+
+      return res.status(201).json({
+        ok: true,
+        message: "Track edited successfully",
+        track,
+      });
+    } catch (error) {
+      console.error("Edit track error:", error);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
 });
 
 export default router;
