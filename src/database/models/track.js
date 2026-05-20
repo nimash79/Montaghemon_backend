@@ -2,11 +2,9 @@ import mongoose from "mongoose";
 
 const TrackSchema = new mongoose.Schema(
   {
-    category: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      default: null,
-    },
+    categories: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "Category", index: true },
+    ],
     name: {
       type: String,
       required: true,

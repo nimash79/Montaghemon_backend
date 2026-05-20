@@ -13,6 +13,7 @@ import connectDB from "./database/index.js";
 import roomRoutes from "./routes/rooms.js";
 import trackRoutes from "./routes/tracks.js";
 import singerRoutes from "./routes/singers.js";
+import categoryRoutes from "./routes/categories.js";
 import { setupRoomSocket } from "./websocket/roomSocket.js";
 import Track from "./database/models/track.js";
 
@@ -78,6 +79,7 @@ connectDB();
 app.use("/api/rooms", roomRoutes);
 app.use("/api/tracks", trackRoutes);
 app.use("/api/singers", singerRoutes);
+app.use("/api/categories", categoryRoutes);
 
 function appendLogLine(line) {
   const file = path.join(

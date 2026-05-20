@@ -8,7 +8,7 @@ const CategorySchema = new mongoose.Schema(
       trim: true,
       unique: true,
     },
-    thumbnail: {
+    image: {
       type: String,
       required: true,
       trim: true,
@@ -25,4 +25,7 @@ const CategorySchema = new mongoose.Schema(
   }
 );
 
-export default mongoose.model("Category", CategorySchema);
+
+
+const Category = mongoose.model("Category", CategorySchema);
+export default Category;

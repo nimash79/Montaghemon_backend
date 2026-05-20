@@ -96,7 +96,7 @@ router.post("/create", requireAdmin, (req, res) => {
 
     try {
       const {
-        category,
+        categories,
         name,
         singers,
         durationMs,
@@ -107,9 +107,9 @@ router.post("/create", requireAdmin, (req, res) => {
       } = req.body;
 
       // validations
-      // if (!category || typeof category !== "string") {
-      //   return res.status(400).json({ error: "category is required" });
-      // }
+      if (!categories) {
+        return res.status(400).json({ error: "category is required" });
+      }
 
       if (!name || typeof name !== "string") {
         return res.status(400).json({ error: "name is required" });
@@ -140,8 +140,8 @@ router.post("/create", requireAdmin, (req, res) => {
       }
 
       const track = await Track.create({
-        // category: category.trim(),
         name: name.trim(),
+        categories,
         singers,
         durationMs: Number(durationMs),
         mtimeMs: Number(mtimeMs),
