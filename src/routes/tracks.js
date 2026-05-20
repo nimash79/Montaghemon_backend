@@ -29,8 +29,8 @@ const storage = multer.diskStorage({
 
     const fullPath = path.join(thumbnailDir, fileName);
 
-    // if (fs.existsSync(fullPath))
-    //   return cb(new Error("Thumbnail already exists"));
+    if (fs.existsSync(fullPath))
+      return cb(new Error("Thumbnail already exists"));
 
     cb(null, fileName);
   },
@@ -339,7 +339,6 @@ router.post("/edit", requireAdmin, (req, res) => {
             durationMs: Number(durationMs),
             mtimeMs: Number(mtimeMs),
             size: Number(size),
-            thumbnail: `/thumbnail/${req.file ? hls + path.extname(req.file.filename) : "placeholder.webp"}`,
             hlsRel: `/hls/${hls}/index.m3u8`,
             disabled,
           },
