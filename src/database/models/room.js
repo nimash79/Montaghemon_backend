@@ -45,8 +45,8 @@ const RoomSchema = new mongoose.Schema(
     },
 
     trackId: {
-      type: Number,
-      default: 0,
+      type: String,
+      default: "",
     },
 
     trackName: {

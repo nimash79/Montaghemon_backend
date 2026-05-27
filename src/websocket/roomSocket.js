@@ -63,7 +63,7 @@ export function setupRoomSocket(wss) {
           type: "join_room",
           room,
           track: {
-            id: room.trackId,
+            _id: room.trackId,
             name: room.trackName,
             singer: room.trackSinger,
             thumbnail: room.thumbnail,
@@ -77,7 +77,7 @@ export function setupRoomSocket(wss) {
 
         const room = await updateRoom(msg.roomId, {
           hlsUrl: msg.track.hlsUrl,
-          trackId: msg.track.id,
+          trackId: msg.track._id,
           trackName: msg.track.name,
           trackSinger: msg.track.singer,
           thumbnail: msg.track.thumbnail,
