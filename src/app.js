@@ -18,6 +18,7 @@ import { setupRoomSocket } from "./websocket/roomSocket.js";
 import Track from "./database/models/track.js";
 
 import dotenv from "dotenv";
+import { initMediasoupMic } from "./websocket/mediasoupMic.js";
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -283,6 +284,7 @@ wss.on("connection", (ws, req) => {
 });
 
 setupRoomSocket(wss);
+initMediasoupMic();
 
 function pushScheduleToAllClients() {
   const now = Date.now();

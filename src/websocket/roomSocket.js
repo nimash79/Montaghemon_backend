@@ -1,9 +1,24 @@
+import crypto from "crypto";
+
 import {
   getRoomMembers,
   addMember,
   removeMember,
 } from "../presence/roomPresence.js";
 import { getRoom, updateRoom } from "./roomService.js";
+import {
+  getRouterRtpCapabilities,
+  createSendTransport,
+  createRecvTransport,
+  connectTransport,
+  produceMic,
+  consumeMic,
+  resumeConsumer,
+  closeMic,
+  hasMicProducer,
+  getMicProducerId,
+  closePeer,
+} from "./mediasoupMic.js";
 
 function send(ws, obj) {
   ws.send(JSON.stringify(obj));
@@ -21,12 +36,18 @@ function broadcastRoom(wss, roomId, obj) {
 
 export function setupRoomSocket(wss) {
   wss.on("connection", (ws, req) => {
+    ws.peerId = crypto.randomUUID();
     ws.on("close", () => {
       removeMember(ws.roomId, ws);
       broadcastRoom(wss, ws.roomId, {
         type: "room_members",
         count: getRoomMembers(ws.roomId),
       });
+      try {
+        closePeer(ws.roomId, ws.peerId);
+      } catch (e) {
+        console.error("closePeer error:", e);
+      }
     });
 
     ws.on("message", async (buf) => {
@@ -59,6 +80,9 @@ export function setupRoomSocket(wss) {
           position += (now - room.startAtServerMs) / 1000;
         }
 
+        const micActive = hasMicProducer(msg.roomId);
+        const micProducerId = getMicProducerId(msg.roomId);
+
         send(ws, {
           type: "join_room",
           room,
@@ -71,6 +95,8 @@ export function setupRoomSocket(wss) {
           },
           positionSeconds: position,
           startAtServerMs: room.startAtServerMs,
+          micActive,
+          micProducerId,
         });
       } else if (msg.type === "start_track") {
         const startAtServerMs = Date.now() + 500;
@@ -132,6 +158,9 @@ export function setupRoomSocket(wss) {
           type: "room_members",
           count: getRoomMembers(ws.roomId),
         });
+        try {
+          closePeer(ws.roomId, ws.peerId);
+        } catch {}
       } else if (msg.type === "send_message") {
         let room = await getRoom(ws.roomId);
         if (!room) return;
@@ -149,7 +178,106 @@ export function setupRoomSocket(wss) {
         broadcastRoom(wss, ws.roomId, {
           type: "get_volume",
           volume: msg.volume,
-        })
+        });
+      } else if (msg.type === "ms_get_router_rtp_capabilities") {
+        send(ws, {
+          type: "ms_router_rtp_capabilities",
+          roomId: msg.roomId,
+          rtpCapabilities: getRouterRtpCapabilities(),
+          micActive: hasMicProducer(msg.roomId),
+        });
+      } else if (msg.type === "ms_create_send_transport") {
+        try {
+          const t = await createSendTransport(msg.roomId, ws.peerId);
+          send(ws, {
+            type: "ms_send_transport_created",
+            params: {
+              id: t.id,
+              iceParameters: t.iceParameters,
+              iceCandidates: t.iceCandidates,
+              dtlsParameters: t.dtlsParameters,
+            },
+          });
+        } catch (e) {
+          console.error(e);
+          send(ws, { type: "ms_error", action: "create_send_transport", error: String(e?.message || e) });
+        }
+      } else if (msg.type === "ms_create_recv_transport") {
+        try {
+          const t = await createRecvTransport(msg.roomId, ws.peerId);
+          send(ws, {
+            type: "ms_recv_transport_created",
+            params: {
+              id: t.id,
+              iceParameters: t.iceParameters,
+              iceCandidates: t.iceCandidates,
+              dtlsParameters: t.dtlsParameters,
+            },
+          });
+        } catch (e) {
+          console.error(e);
+          send(ws, { type: "ms_error", action: "create_recv_transport", error: String(e?.message || e) });
+        }
+      } else if (msg.type === "ms_connect_transport") {
+        try {
+          await connectTransport(msg.roomId, ws.peerId, msg.direction, msg.dtlsParameters);
+          send(ws, { type: "ms_transport_connected", direction: msg.direction });
+        } catch (e) {
+          console.error(e);
+          send(ws, { type: "ms_error", action: "connect_transport", error: String(e?.message || e) });
+        }
+      } else if (msg.type === "ms_produce_mic") {
+        try {
+          const producer = await produceMic(msg.roomId, ws.peerId, msg.kind, msg.rtpParameters);
+
+          // ACK to producer
+          send(ws, { type: "ms_mic_produced", producerId: producer.id });
+
+          // OPTIONAL: persist mic state if you want
+          // await updateRoom(msg.roomId, { micActive: true });
+
+          // notify room
+          broadcastRoom(wss, msg.roomId, { type: "mic_started", producerId: producer.id });
+        } catch (e) {
+          console.error(e);
+          send(ws, { type: "ms_error", action: "produce_mic", error: String(e?.message || e) });
+        }
+      } else if (msg.type === "ms_close_mic") {
+        try {
+          closeMic(msg.roomId, ws.peerId);
+
+          // OPTIONAL: persist mic state if you want
+          // await updateRoom(msg.roomId, { micActive: false });
+
+          broadcastRoom(wss, msg.roomId, { type: "mic_stopped" });
+        } catch (e) {
+          console.error(e);
+          send(ws, { type: "ms_error", action: "close_mic", error: String(e?.message || e) });
+        }
+      } else if (msg.type === "ms_consume_mic") {
+        try {
+          const consumer = await consumeMic(msg.roomId, ws.peerId, msg.rtpCapabilities);
+          send(ws, {
+            type: "ms_mic_consumed",
+            params: {
+              id: consumer.id,
+              producerId: consumer.producerId,
+              kind: consumer.kind,
+              rtpParameters: consumer.rtpParameters,
+            },
+          });
+        } catch (e) {
+          // اگر میکروفون فعال نیست، این ارور طبیعی است
+          send(ws, { type: "ms_error", action: "consume_mic", error: String(e?.message || e) });
+        }
+      } else if (msg.type === "ms_resume_consumer") {
+        try {
+          await resumeConsumer(msg.roomId, ws.peerId, msg.consumerId);
+          send(ws, { type: "ms_consumer_resumed", consumerId: msg.consumerId });
+        } catch (e) {
+          console.error(e);
+          send(ws, { type: "ms_error", action: "resume_consumer", error: String(e?.message || e) });
+        }
       }
     });
   });
